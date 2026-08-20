@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="description"
+      content="STAR is a training-free inference method that steers late-layer action representations in vision-language-action models using proprioception."
+    />
+    <meta name="keywords" content="STAR, VLA, robot learning, training-free inference, proprioception" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>STAR: Steering Action Representations with Proprioception for VLA Inference</title>
+
+    <link href="https://fonts.googleapis.com/css?family=Google+Sans|Noto+Sans:400,500,600,700" rel="stylesheet" />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+    <link rel="icon" type="image/png" href="./icon.png" />
+  </head>
+  <body>
+    <nav class="site-navbar" aria-label="Main navigation">
+      <div class="navbar-brand">
+        <a class="nav-title" href="#top">STAR</a>
+      </div>
+      <div class="navbar-menu">
+        <a href="#overview">Overview</a>
+        <a href="#abstract">Abstract</a>
+        <a href="#method">Method</a>
+        <a href="#results">Results</a>
+        <a href="#analysis">Analysis</a>
+        <a href="https://github.com/PKU-VaLuE-Lab/STAR">Code</a>
+      </div>
+    </nav>
+
+    <header class="publication-hero" id="top">
+      <div class="publication-container">
+        <h1 class="publication-title">STAR: Steering Action Representations with Proprioception for VLA Inference</h1>
+
+        <div class="publication-authors author-list" aria-label="Paper authors">
+          <span class="author-block">Guangyu Zhao<sup>1,*</sup></span>
+          <span class="author-block">Yongchang Zhang<sup>1,*</sup></span>
+          <span class="author-block">Haoxuan Ru<sup>1,*</sup></span>
+          <span class="author-block">Kaichen He<sup>1</sup></span>
+          <span class="author-block">Haoran Wen<sup>2</sup></span>
+          <span class="author-block">Kun Zhan<sup>2</sup></span>
+          <span class="author-block">Yin Li<sup>3</sup></span>
+          <span class="author-block">Yiwu Zhong<sup>1,†</sup></span>
+        </div>
+
+        <div class="publication-authors affiliation-list">
+          <span class="author-block"><sup>1</sup>Peking University</span>
+          <span class="author-block"><sup>2</sup>Li Auto</span>
+          <span class="author-block"><sup>3</sup>University of Wisconsin–Madison</span>
+        </div>
+
+        <div class="author-notes">
+          <span>* Equal contribution.</span>
+          <span>† Corresponding author.</span>
+        </div>
+
+        <div class="publication-links">
+          <span class="link-block">
+            <span class="external-link button is-disabled" aria-disabled="true" title="Paper coming soon">
+              <span class="icon" aria-hidden="true"><i class="fa-regular fa-file-pdf"></i></span>
+              <span>Paper</span>
+            </span>
+          </span>
+          <span class="link-block">
+            <a class="external-link button" href="https://github.com/PKU-VaLuE-Lab/STAR">
+              <span class="icon" aria-hidden="true"><i class="fa-brands fa-github"></i></span>
+              <span>Code</span>
+            </a>
+          </span>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section class="section overview-section" id="overview">
+        <div class="container desktop-width">
+          <figure class="figure-panel overview-figure">
+            <img
+              src="./assets/motivation.png"
+              alt="STAR motivation, probing experiment, residual block, layer-wise object awareness, and benchmark results"
+            />
+            <figcaption>
+              <strong>TL;DR:</strong> VLAs must recognize the object to manipulate and the target of the action. If a task-relevant object is masked, the model's hidden states should change substantially. Yet, we find that this response weakens in late layers, suggesting that task-relevant visual evidence is not fully preserved near the action output. STAR mitigates this decline during inference, requires no training, and improves task performance.
+            </figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section class="section" id="abstract">
+        <div class="container desktop-width">
+          <h2 class="section-title">Abstract</h2>
+          <div class="abstract-content">
+            <p>
+              Vision-language-action models (VLAs) map language instructions and visual observations to robot actions,
+              showing strong capabilities across robotic manipulation tasks. However, in a probing experiment, we find
+              that action representations near the action output do not fully preserve task-relevant visual grounding.
+              Motivated by this late-layer grounding gap, we introduce STAR, for <strong>ST</strong>eering
+              <strong>A</strong>ction <strong>R</strong>epresentations, a training-free inference method for pre-trained
+              VLAs.
+            </p>
+            <p>
+              STAR applies an exponential moving average over late-layer residual updates, allowing later action
+              representations to inherit object-aware update directions from earlier layers without model updates or
+              architectural changes. It further uses recent proprioceptive states to adapt the mixing strength, using
+              conservative mixing when execution dynamics change rapidly. Experiments on robot manipulation benchmarks
+              show that STAR improves late-layer object awareness and increases average task success rates by 4.0
+              percentage points.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section method-section" id="method">
+        <div class="container widescreen-width">
+          <div class="section-heading">
+            <h2 class="section-title">Method</h2>
+            <p>
+              STAR leaves the first two-thirds of the Transformer unchanged. Across the final third, it maintains an
+              exponential moving average of residual updates, so each late layer combines its current update with the
+              update trend accumulated from preceding layers. This helps visual evidence formed earlier persist until
+              action decoding. Recent proprioceptive states adjust the mixing strength at every control step.
+            </p>
+          </div>
+
+          <article class="method-panel">
+            <figure class="figure-panel method-figure">
+              <img
+                src="./assets/method-overview.png"
+                alt="Comparison of native VLA inference and STAR residual mixing"
+                loading="lazy"
+              />
+              <figcaption>
+                Left: native inference applies each residual update directly. Right: STAR mixes the update trend across
+                late layers. The coefficient β<sub>t</sub> is computed once per control step from recent proprioceptive
+                history.
+              </figcaption>
+            </figure>
+
+            <div class="method-content">
+              <h3>Training-free residual steering</h3>
+              <p>
+                Let Δ<i>h</i><sub>t</sub><sup>k</sup> be the residual update produced by late layer <i>k</i>. STAR combines
+                this current update with the accumulated update trend <i>m</i><sub>t</sub><sup>k−1</sup>. The resulting
+                trend <i>m</i><sub>t</sub><sup>k</sup> replaces the original update passed to the next layer. A single
+                coefficient β<sub>t</sub> is used throughout the forward pass at control step <i>t</i>.
+              </p>
+              <div class="equation" aria-label="STAR exponential moving average equation">
+                <i>m</i><sub>t</sub><sup>k</sup> = β<sub>t</sub><i>m</i><sub>t</sub><sup>k−1</sup>
+                + (1 − β<sub>t</sub>)Δ<i>h</i><sub>t</sub><sup>k</sup>
+              </div>
+              <ol>
+                <li><strong>Keep early layers unchanged.</strong> They form language-conditioned visual evidence.</li>
+                <li><strong>Mix late-layer updates.</strong> The EMA helps this evidence persist across depth.</li>
+                <li><strong>Adapt during execution.</strong> Mixing is stronger during steady progress and more conservative during rapid transitions or fine adjustments.</li>
+              </ol>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="section results-section" id="results">
+        <div class="container widescreen-width">
+          <div class="section-heading">
+            <h2 class="section-title">Detailed Experimental Results</h2>
+            <p>
+              Native, DTP, and STAR use the same frozen backbone checkpoints. DTP is another training-free inference
+              baseline for VLAs (<a href="https://arxiv.org/abs/2601.16065">Li et al., 2026</a>). All entries report
+              task success rate (%).
+            </p>
+          </div>
+
+          <div class="results-list">
+            <article class="result-panel">
+              <div class="result-header">
+                <h3>SimplerEnv</h3>
+              </div>
+              <p class="result-caption">
+                We use the public SimplerEnv evaluation integration available for each backbone. The GR00T-N1.5 integration covers all six Google Robot tasks. The OpenVLA integration covers five and does not include Pick Object, so its average is computed over those five tasks.
+              </p>
+              <div class="table-wrap">
+                <table class="result-table simplerenv-table">
+                  <thead>
+                    <tr>
+                      <th rowspan="2">Backbone</th>
+                      <th rowspan="2">Method</th>
+                      <th colspan="6">SimplerEnv Google Robot Tasks</th>
+                      <th rowspan="2">Avg.</th>
+                    </tr>
+                    <tr>
+                      <th>Open<br />Drawer</th>
+                      <th>Place in<br />Drawer</th>
+                      <th>Pick<br />Coke Can</th>
+                      <th>Move<br />Near</th>
+                      <th>Close<br />Drawer</th>
+                      <th>Pick<br />Object</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td rowspan="3" class="model-cell">GR00T-N1.5</td>
+                      <td>Native</td><td>26.7</td><td>4.0</td><td>69.3</td><td>68.7</td><td>45.0</td><td>32.3</td><td>41.0</td>
+                    </tr>
+                    <tr>
+                      <td>DTP</td><td>26.7</td><td>4.0</td><td>59.3</td><td>68.7</td><td>41.7</td><td>39.3</td><td>40.0</td>
+                    </tr>
+                    <tr class="ours-row">
+                      <td><strong>STAR</strong></td><td><strong>32.0</strong></td><td><strong>4.7</strong></td><td><strong>77.3</strong></td><td><strong>76.7</strong></td><td><strong>47.3</strong></td><td><strong>40.0</strong></td><td><strong>46.3</strong></td>
+                    </tr>
+                    <tr class="model-start">
+                      <td rowspan="3" class="model-cell">OpenVLA</td>
+                      <td>Native</td><td>7.4</td><td>0.0</td><td>65.3</td><td>56.7</td><td>22.2</td><td>—</td><td>30.3</td>
+                    </tr>
+                    <tr>
+                      <td>DTP</td><td>11.1</td><td>0.0</td><td>69.3</td><td><strong>69.0</strong></td><td>22.2</td><td>—</td><td>34.3</td>
+                    </tr>
+                    <tr class="ours-row">
+                      <td><strong>STAR</strong></td><td><strong>18.5</strong></td><td><strong>3.7</strong></td><td><strong>70.0</strong></td><td>61.7</td><td><strong>25.9</strong></td><td>—</td><td><strong>36.0</strong></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </article>
+
+            <article class="result-panel">
+              <div class="result-header">
+                <h3>LIBERO-PRO</h3>
+              </div>
+              <p class="result-caption">
+                Results under language, object-attribute, spatial-configuration, task, and visual-context variations.
+              </p>
+              <div class="table-wrap">
+                <table class="result-table libero-table">
+                  <thead>
+                    <tr>
+                      <th rowspan="2">Backbone</th>
+                      <th rowspan="2">Method</th>
+                      <th colspan="5">LIBERO-PRO Perturbations on LIBERO-10</th>
+                      <th rowspan="2">Avg.</th>
+                    </tr>
+                    <tr>
+                      <th>lan</th><th>object</th><th>swap</th><th>task</th><th>env</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td rowspan="3" class="model-cell">GR00T-N1.5</td>
+                      <td>Native</td><td>81.2</td><td>40.4</td><td>0.0</td><td>6.0</td><td>73.8</td><td>40.3</td>
+                    </tr>
+                    <tr>
+                      <td>DTP</td><td>82.0</td><td>42.2</td><td>0.0</td><td>1.8</td><td>75.6</td><td>40.3</td>
+                    </tr>
+                    <tr class="ours-row">
+                      <td><strong>STAR</strong></td><td><strong>82.8</strong></td><td><strong>48.0</strong></td><td><strong>2.2</strong></td><td><strong>6.8</strong></td><td><strong>76.4</strong></td><td><strong>43.2</strong></td>
+                    </tr>
+                    <tr class="model-start">
+                      <td rowspan="3" class="model-cell">π<sub>0.5</sub></td>
+                      <td>Native</td><td><strong>92.8</strong></td><td>66.2</td><td>9.2</td><td>6.8</td><td>65.8</td><td>48.2</td>
+                    </tr>
+                    <tr>
+                      <td>DTP</td><td>90.4</td><td>64.6</td><td>8.0</td><td><strong>7.8</strong></td><td>67.6</td><td>47.7</td>
+                    </tr>
+                    <tr class="ours-row">
+                      <td><strong>STAR</strong></td><td><strong>92.8</strong></td><td><strong>68.6</strong></td><td><strong>13.0</strong></td><td>7.6</td><td><strong>70.2</strong></td><td><strong>50.4</strong></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </article>
+
+            <article class="result-panel real-robot-panel">
+              <div class="result-header">
+                <h3>Real Robot</h3>
+              </div>
+              <p class="result-caption">
+                The task requires picking up a pear and placing it in a bowl. Both native inference and STAR use the same
+                fine-tuned π<sub>0.5</sub> checkpoint. On the real-robot system with a single NVIDIA RTX 3090, STAR
+                introduces only 3.3% additional inference latency relative to native inference.
+              </p>
+              <div class="table-wrap compact-table-wrap">
+                <table class="result-table compact-table">
+                  <thead><tr><th>Method</th><th>Successes / Trials</th><th>Success Rate</th></tr></thead>
+                  <tbody>
+                    <tr><td>Native</td><td>17 / 40</td><td>42.5%</td></tr>
+                    <tr class="ours-row"><td><strong>STAR</strong></td><td><strong>19 / 40</strong></td><td><strong>47.5%</strong></td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section analysis-section" id="analysis">
+        <div class="container widescreen-width">
+          <div class="section-heading">
+            <h2 class="section-title">Analysis</h2>
+            <p>
+              We analyze π<sub>0.5</sub> on LIBERO-PRO with two complementary diagnostics. Object masking tests whether
+              replacing task-object pixels with the image's mean RGB value changes the hidden states used for action
+              generation. Input-gradient saliency (<a href="https://arxiv.org/abs/1312.6034">Simonyan et al.,
+              2013</a>) tests whether those pixels influence the final predicted action. We also inspect attention maps
+              to determine whether the hidden-state effect appears as a visible change in attention allocation.
+            </p>
+          </div>
+
+          <div class="analysis-list">
+            <article class="analysis-panel">
+              <h3>Masking-based object awareness</h3>
+              <div class="analysis-copy">
+                <p>
+                  We run the model on an original image and on a paired image in which the task-relevant object's pixels
+                  are replaced with the mean RGB value of the full image. At each layer, object awareness is the
+                  normalized L2 change in the action hidden state. A larger value means that removing the object's
+                  visual evidence has a stronger effect on the representation used to generate actions.
+                </p>
+                <p>
+                  To check that the score is not merely responding to generic image corruption, we use two controls:
+                  the same number of masked pixels scattered randomly across the image, and a similar-area rectangle
+                  sampled from the background.
+                </p>
+              </div>
+              <figure class="figure-panel analysis-figure">
+                <img
+                  src="./assets/object-awareness.png"
+                  alt="Object, random-pixel, and background masking controls; late-layer object-awareness scores; attention maps; and object attention mass under native inference and STAR"
+                  loading="lazy"
+                />
+                <figcaption>
+                  STAR makes late action representations more sensitive to task-relevant object evidence, while the
+                  control masks elicit weaker responses. Native inference and STAR show similar attention patterns,
+                  suggesting that STAR's effect is more evident in action hidden states than in attention maps.
+                </figcaption>
+              </figure>
+            </article>
+
+            <article class="analysis-panel">
+              <h3>Action-gradient dependence on the task object</h3>
+              <div class="analysis-copy">
+                <p>
+                  The masking experiment measures hidden-state sensitivity. We next test whether the final predicted
+                  action actually relies on the task object. We differentiate a scalar score derived from the predicted
+                  action chunk with respect to the input image, then measure the fraction of total input-gradient
+                  magnitude that falls inside the task-object region. A higher score means that the selected action
+                  depends more strongly on pixels belonging to the key object.
+                </p>
+              </div>
+              <figure class="figure-panel gradient-figure">
+                <img
+                  src="./assets/gradient-results.png"
+                  alt="Normalized target-object input-gradient evidence across LIBERO-PRO splits"
+                  loading="lazy"
+                />
+                <figcaption>
+                  Across LIBERO-PRO, STAR places more input-gradient evidence inside the task-object region than native
+                  inference. The paired differences show that this trend holds across evaluation samples.
+                </figcaption>
+              </figure>
+
+              <figure class="figure-panel saliency-figure">
+                <img
+                  src="./assets/app-grad-vis.png"
+                  alt="RGB observations and action-gradient saliency maps under native inference and STAR, with task-relevant objects marked by cyan boxes"
+                  loading="lazy"
+                />
+                <figcaption>
+                  Qualitative saliency maps show the same pattern: STAR concentrates more action-relevant gradient
+                  evidence within the marked task-object regions.
+                </figcaption>
+              </figure>
+            </article>
+          </div>
+        </div>
+      </section>
+    </main>
+
+  </body>
+</html>
